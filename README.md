@@ -1,7 +1,7 @@
 # **Find the Spy**
 
 In this game, player reveals the cards on the board with his own copies of cards. 
-Cards battle against each other. Defeating card from the board permanently reveals it.
+Cards fight against each other. Defeating card from the board permanently reveals it.
 The higher level of the revealed card, the higher the amount of points that player gets.
 
 The main goal is to collect as many points as possible, especially finding the Ultimate Spy for the most points.
