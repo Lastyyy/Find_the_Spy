@@ -1,4 +1,4 @@
-# **Find a spy**
+# **Find the Spy**
 
 In this game, player reveals the cards on the board with his own copies of cards. 
 The higher level of the revealed card, the higher the amount of points that player gets.
