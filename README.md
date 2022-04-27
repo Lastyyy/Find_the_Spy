@@ -15,7 +15,7 @@ The main goal is to collect as many points as possible, especially finding the U
 
 To run the game, simply install it with the [executable file.](Find_the_Spy_installer.exe)
 
-You will have Find_the_Spy.exe file in Find_the_Spy folder.
+You will have Find_the_Spy.exe file in the Find_the_Spy folder.
 
 ## Game
 
