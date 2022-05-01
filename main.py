@@ -15,7 +15,8 @@ root.configure(bg=bg_color)
 
 spy_image = []
 for i in range(0, 8):
-    spy_image.append(ImageTk.PhotoImage(Image.open("img/Spy" + str(i) + ".png").resize((100, 100), Image.ANTIALIAS)))
+    spy_image.append(ImageTk.PhotoImage(
+        Image.open("img/Spy" + str(i) + ".png").resize((100, 100), Image.ANTIALIAS)))
 
 chooseSpyFrame = Frame(root, bg=bg_color)
 chooseSpyFrame.grid(row=0, column=0, rowspan=16)
@@ -30,16 +31,22 @@ rightFrame = Frame(root, bg=bg_color)
 rightFrame.grid(row=4, column=16, rowspan=15, columnspan=3)
 
 
-# Global variables
+# Assigning global variables
 num_of_spies_to_be_chosen = {1: 5, 2: 2, 3: 2, 4: 1, 5: 1, 6: 1}
-board, board_value, spies_to_pick = [], [], []
-last_picked = 0
+board, board_value, spies_to_pick, neighbours_to_flash = [], [], [], []
+last_picked, end_of_flashing = 0, 1
 can_card_be_changed = True
 points = 0
 points_in_row, points_in_col = [0, 0, 0, 0, 0], [0, 0, 0, 0, 0]
 row_bonuses, col_bonuses = [], []
-cards_to_assign = [1, 1, 1, 1, 1, 1, 1,  2, 2, 2, 2,  3, 3, 3, 3, 3,  4, 4, 4, 4, 4,  5, 5, 5,  6]
+cards_to_assign = [1, 1, 1, 1, 1, 1, 1,
+                   2, 2, 2, 2,
+                   3, 3, 3, 3, 3,
+                   4, 4, 4, 4, 4,
+                   5, 5, 5,
+                   6]
 flashing_count = 6
+after_func = None
 
 
 def clear_frame(frame):
@@ -48,10 +55,14 @@ def clear_frame(frame):
 
 
 def restart_game():
+    global after_func
     clear_frame(announcementsFrame)
     clear_frame(rightFrame)
     clear_frame(chooseSpyFrame)
     clear_frame(boardFrame)
+    if after_func is not None:
+        root.after_cancel(after_func)
+        after_func = None
     new_game()
 
 
@@ -104,7 +115,7 @@ announcement = Announcement()
 
 
 class CardOnBoard:
-    _five = False
+    _five_in_neigh = False
     win_fight = True
 
     def __init__(self, x, y):
@@ -114,45 +125,53 @@ class CardOnBoard:
                              command=partial(reveal_card, self, x, y))
         self.button.grid(row=4 + x, column=1 + y)
 
+    def change_command_to_reveal_card(self):
+        self.button.config(command=partial(reveal_card, self, self.x, self.y))
+
     # Define if this card on the board has a five level spy in a neighbourhood
     def five_in_neighbourhood(self):
         for card_num in range(0, 25):
             if self.x - 1 <= board[card_num].x <= self.x + 1 and self.y - 1 <= board[card_num].y <= self.y + 1:
                 # and board[card_num] != self - to avoid 5 thinking she has herself in neighbourhood
                 if board_value[board[card_num].x][board[card_num].y] == 5 and board[card_num] != self:
-                    self._five = True
+                    self._five_in_neigh = True
                     return 1
 
     # Flashing the button, if it was clicked while having picked weaker spy
     # Also flashing the neighbours with exclamation marks, if there is 5 in neighbourhood
     def flashing(self):
-        global flashing_count
+        global flashing_count, end_of_flashing, neighbours_to_flash, after_func
         if flashing_count > 0:
             if flashing_count % 2 == 0:
                 # There is 5 in neighbourhood - flashing neighbours that are hidden
-                if self._five:
+                if self._five_in_neigh and flashing_count == 6:
                     for card_num in range(0, 25):
                         if self.x - 1 <= board[card_num].x <= self.x + 1 and self.y - 1 <= board[card_num].y <= self.y + 1:
                             if board[card_num].button['relief'] != SUNKEN:
+                                neighbours_to_flash.append(card_num)
                                 board[card_num].button.config(image=spy_image[7])
-
+                elif self._five_in_neigh:
+                    for i, card_num in enumerate(neighbours_to_flash):
+                        board[card_num].button.config(image=spy_image[7])
                 # Fight was lost - flashing the card that was challenged and won
                 if not self.win_fight:
                     self.button.config(image=spy_image[board_value[self.x][self.y]])
 
             else:
-                if self._five:
-                    for card_num in range(0, 25):
-                        if self.x - 1 <= board[card_num].x <= self.x + 1 and self.y - 1 <= board[card_num].y <= self.y + 1:
-                            if board[card_num].button['relief'] != SUNKEN:
-                                board[card_num].button.config(image=spy_image[0])
+                if self._five_in_neigh:
+                    for i, card_num in enumerate(neighbours_to_flash):
+                        board[card_num].button.config(image=spy_image[0])
 
                 if not self.win_fight:
                     self.button.config(image=spy_image[0])
+
             flashing_count -= 1
-            root.after(466, self.flashing)
+            after_func = root.after(466, self.flashing)
+
         else:
+            end_of_flashing = 1
             flashing_count = 6
+            neighbours_to_flash = []
 
 
 class ChooseTheSpyButton:
@@ -168,20 +187,21 @@ def new_game():
 
     global num_of_spies_to_be_chosen, right_menu, announcement, spies_to_pick, row_bonuses, col_bonuses
     global board, board_value, last_picked, can_card_be_changed, points, points_in_row, points_in_col
-    global cards_to_assign, flashing_count
+    global cards_to_assign, flashing_count, end_of_flashing, neighbours_to_flash
 
     num_of_spies_to_be_chosen = {1: 5, 2: 2, 3: 2, 4: 1, 5: 1, 6: 1}
-    board = []
-    board_value = []
-    spies_to_pick = []
-    last_picked = 0
+    board, board_value, spies_to_pick, neighbours_to_flash = [], [], [], []
+    last_picked, end_of_flashing = 0, 1
     can_card_be_changed = True
     points = 0
-    points_in_row = [0, 0, 0, 0, 0]
-    row_bonuses = []
-    points_in_col = [0, 0, 0, 0, 0]
-    col_bonuses = []
-    cards_to_assign = [1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 5, 5, 5, 6]
+    points_in_row, points_in_col = [0, 0, 0, 0, 0], [0, 0, 0, 0, 0]
+    row_bonuses, col_bonuses = [], []
+    cards_to_assign = [1, 1, 1, 1, 1, 1, 1,
+                       2, 2, 2, 2,
+                       3, 3, 3, 3, 3,
+                       4, 4, 4, 4, 4,
+                       5, 5, 5,
+                       6]
     flashing_count = 6
 
     announcement = Announcement()
@@ -197,6 +217,7 @@ def new_game():
     for i in range(0, 5):
         for j in range(0, 5):
             board.append(CardOnBoard(i, j))
+            board[-1].button.config(image=spy_image[0])
 
     # Hidden board cards' values
     for i in range(0, 5):
@@ -225,129 +246,132 @@ def pick_spy(x):
 
 
 def reveal_card(card, x, y):
-    global points, can_card_be_changed, last_picked, end_game
+    global points, can_card_be_changed, last_picked, end_game, flashing_count, end_of_flashing
 
-    # win_fight - if the fight was lost, the flashing of the card will be needed
-    win_fight = True
-    five_got_defeated = False
-    ultra_spy_duel = False
-    end_game = True
+    if not end_of_flashing:
+        nothing()
 
-    # fighter - to remember which lvl of spy was challenging the one on the board
-    fighter = last_picked
-
-    # User didn't choose a spy he wants to send to a fight
-    if last_picked == 0:
-        messagebox.showinfo("Choose a Spy!", "You need to choose a Spy first!")
-        return 0
-
-    # Ultra Spy - single use, defeats everyone, only him can defeat the enemy's Ultra Spy for 100 pts
-    elif last_picked == 6:
-        if board_value[x][y] == 6:
-            points += 100
-            ultra_spy_duel = True
-        else:
-            points += 10 * board_value[x][y]
-        right_menu.points.config(text=str(points))
-        card.button.config(image=spy_image[board_value[x][y]],
-                           command=nothing, relief=SUNKEN)
-        num_of_spies_to_be_chosen[6] = 0
-        spies_to_pick[5].button.config(text="x0")
-        can_card_be_changed = True
-        last_picked = 0
-        right_menu.last_picked_img.config(image=spy_image[0])
-
-    # If spy level 5 tries to kill an enemy (strength doesn't matter) with a 5 level spy as a neighbour,
-    # it dies thanks to help of enemy 5 lv spy and doesn't kill anyone
-    elif last_picked == 5 and card.five_in_neighbourhood() == 1:
-        if can_card_be_changed:
-            num_of_spies_to_be_chosen[last_picked] = num_of_spies_to_be_chosen[last_picked] - 1
-            spies_to_pick[last_picked - 1].button.config(text="x" + str(num_of_spies_to_be_chosen[last_picked]))
-        can_card_be_changed = True
-        last_picked = 0
-        right_menu.last_picked_img.config(image=spy_image[0])
-        win_fight = False
-        five_got_defeated = True
-
-    # 1-5 level Spy
     else:
-        # better/same level spy - killing an enemy and assigning points
-        if board_value[x][y] <= last_picked:
-            points += 10 * board_value[x][y]
+        # win_fight - if the fight was lost, the flashing of the revealed card will be provided
+        win_fight = True
+        five_got_defeated = False
+        ultra_spy_duel = False
+        end_game = True
+
+        # fighter - to remember which lvl of spy was challenging the one on the board
+        fighter = last_picked
+
+        # User didn't choose a spy he wants to send to a fight
+        if last_picked == 0:
+            messagebox.showinfo("Choose a Spy!", "You need to choose a Spy first!")
+            return 0
+
+        # Ultra Spy - single use, defeats everyone, only him can defeat the enemy's Ultra Spy for 100 pts
+        elif last_picked == 6:
+            if board_value[x][y] == 6:
+                points += 100
+                ultra_spy_duel = True
+            else:
+                points += 10 * board_value[x][y]
             right_menu.points.config(text=str(points))
             card.button.config(image=spy_image[board_value[x][y]],
                                command=nothing, relief=SUNKEN)
-            if can_card_be_changed:
-                num_of_spies_to_be_chosen[last_picked] = num_of_spies_to_be_chosen[last_picked] - 1
-                spies_to_pick[last_picked - 1].button.config(text="x" + str(num_of_spies_to_be_chosen[last_picked]))
-            # better spy
-            if board_value[x][y] < last_picked:
-                can_card_be_changed = False
-            # same level spy - killing an enemy, assigning points, but dying in an even fight
-            else:
-                can_card_be_changed = True
-                last_picked = 0
-                right_menu.last_picked_img.config(image=spy_image[0])
-
-        # worse spy
-        else:
+            num_of_spies_to_be_chosen[6] = 0
+            spies_to_pick[5].button.config(text="x0")
+            can_card_be_changed = True
+            last_picked = 0
             right_menu.last_picked_img.config(image=spy_image[0])
-            # TODO animation of flashing the card for 2-3 seconds
-            # card.flashing - hidden card image is supposed to flash
-            win_fight = False
+
+        # If spy level 5 tries to kill an enemy (enemy's lvl doesn't matter) with a 5 level spy as a neighbour,
+        # it dies thanks to help of enemy 5 lv spy and doesn't kill anyone
+        elif last_picked == 5 and card.five_in_neighbourhood() == 1:
             if can_card_be_changed:
                 num_of_spies_to_be_chosen[last_picked] = num_of_spies_to_be_chosen[last_picked] - 1
                 spies_to_pick[last_picked - 1].button.config(text="x" + str(num_of_spies_to_be_chosen[last_picked]))
             can_card_be_changed = True
             last_picked = 0
             right_menu.last_picked_img.config(image=spy_image[0])
+            win_fight = False
+            five_got_defeated = True
 
-    # updating Last Revealed Card
-    right_menu.last_revealed_img.config(image=spy_image[board_value[x][y]])
-
-    # Adding the point to row and column, checking the bonuses
-    if win_fight:
-        points_in_row[x] += 1
-        if points_in_row[x] == 5:
-            row_bonuses[x].config(text="+20")
-            points += 20
-            right_menu.points.config(text=str(points))
-
-        points_in_col[y] += 1
-        if points_in_col[y] == 5:
-            col_bonuses[y].config(text="+20")
-            points += 20
-            right_menu.points.config(text=str(points))
-
-    # Checking if there should be any flashing provided
-    if card.five_in_neighbourhood() or (not win_fight):
-        card.win_fight = win_fight
-        card.flashing()
-
-    # TODO announcements
-    if ultra_spy_duel:
-        announcement.new_announcement(f"Your Ultra Spy defeated enemy's Ultra Spy!")
-    elif fighter == 6:
-        announcement.new_announcement(f"Your Ultra Spy defeated enemy's {board_value[x][y]} lvl Spy!")
-    elif win_fight and fighter == board_value[x][y]:
-        announcement.new_announcement(f"Your and enemy's {fighter} lvl Spies defeated each other!")
-    elif win_fight:
-        announcement.new_announcement(f"Your {fighter} lvl Spy defeated enemy's {board_value[x][y]} lvl Spy!")
-    elif five_got_defeated:
-        announcement.new_announcement(f"Your 5 lvl Spy lost due to help of enemy's 5 lvl Spy!")
-    else:
-        announcement.new_announcement(f"Your {fighter} lvl Spy lost against enemy's {board_value[x][y]} lvl Spy!")
-
-    for key, val in num_of_spies_to_be_chosen.items():
-        if val > 0:
-            end_game = False
-            break
-
-    if end_game and can_card_be_changed:
-        if messagebox.askquestion("GG WP!", f"You gathered {points} points!\nDo you wish to play again?") == "yes":
-            restart_game()
+        # 1-5 level Spy
         else:
-            exit()
+            # better/same level spy - killing an enemy and assigning points
+            if board_value[x][y] <= last_picked:
+                points += 10 * board_value[x][y]
+                right_menu.points.config(text=str(points))
+                card.button.config(image=spy_image[board_value[x][y]],
+                                   command=nothing, relief=SUNKEN)
+                if can_card_be_changed:
+                    num_of_spies_to_be_chosen[last_picked] = num_of_spies_to_be_chosen[last_picked] - 1
+                    spies_to_pick[last_picked - 1].button.config(text="x" + str(num_of_spies_to_be_chosen[last_picked]))
+                # better spy
+                if board_value[x][y] < last_picked:
+                    can_card_be_changed = False
+                # same level spy - killing an enemy, assigning points, but dying in an even fight
+                else:
+                    can_card_be_changed = True
+                    last_picked = 0
+                    right_menu.last_picked_img.config(image=spy_image[0])
+
+            # worse spy
+            else:
+                right_menu.last_picked_img.config(image=spy_image[0])
+                win_fight = False
+                if can_card_be_changed:
+                    num_of_spies_to_be_chosen[last_picked] = num_of_spies_to_be_chosen[last_picked] - 1
+                    spies_to_pick[last_picked - 1].button.config(text="x" + str(num_of_spies_to_be_chosen[last_picked]))
+                can_card_be_changed = True
+                last_picked = 0
+                right_menu.last_picked_img.config(image=spy_image[0])
+
+        # updating Last Revealed Card
+        right_menu.last_revealed_img.config(image=spy_image[board_value[x][y]])
+
+        # Adding the point to row and column, checking the bonuses
+        if win_fight:
+            points_in_row[x] += 1
+            if points_in_row[x] == 5:
+                row_bonuses[x].config(text="+20")
+                points += 20
+                right_menu.points.config(text=str(points))
+
+            points_in_col[y] += 1
+            if points_in_col[y] == 5:
+                col_bonuses[y].config(text="+20")
+                points += 20
+                right_menu.points.config(text=str(points))
+
+        # Checking if there should be any flashing provided
+        if card.five_in_neighbourhood() or (not win_fight):
+            card.win_fight = win_fight
+            end_of_flashing = 0
+            card.flashing()
+
+        if ultra_spy_duel:
+            announcement.new_announcement(f"Your Ultra Spy defeated enemy's Ultra Spy!")
+        elif fighter == 6:
+            announcement.new_announcement(f"Your Ultra Spy defeated enemy's {board_value[x][y]} lvl Spy!")
+        elif win_fight and fighter == board_value[x][y]:
+            announcement.new_announcement(f"Your and enemy's {fighter} lvl Spies defeated each other!")
+        elif win_fight:
+            announcement.new_announcement(f"Your {fighter} lvl Spy defeated enemy's {board_value[x][y]} lvl Spy!")
+        elif five_got_defeated:
+            announcement.new_announcement(f"Your 5 lvl Spy lost due to the help of enemy's 5 lvl Spy!")
+        else:
+            announcement.new_announcement(f"Your {fighter} lvl Spy lost against enemy's {board_value[x][y]} lvl Spy!")
+
+        for key, val in num_of_spies_to_be_chosen.items():
+            if val > 0:
+                end_game = False
+                break
+
+        if end_game and can_card_be_changed:
+            if messagebox.askquestion(
+                    "GG WP!", f"You gathered {points} points!\nDo you wish to play again?") == "yes":
+                restart_game()
+            else:
+                exit()
 
 
 def nothing():
